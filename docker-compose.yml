@@ -8,19 +8,17 @@ networks:
         - subnet: 10.2.0.0/24
 
 services:
-  unbound:
-    image: "mvance/unbound:latest"
-    container_name: unbound
+  cloudflared:
+    image: visibilityspots/cloudflared:latest
+    container_name: cloudflared
     restart: unless-stopped
-    hostname: "unbound"
-    volumes:
-      - "./unbound:/opt/unbound/etc/unbound/"
+    hostname: "cloudflared"
     networks:
       private_network:
         ipv4_address: 10.2.0.200
 
   wireguard:
-    depends_on: [unbound, pihole]
+    depends_on: [cloudflared, pihole]
     image: linuxserver/wireguard
     container_name: wireguard
     cap_add:
@@ -29,13 +27,12 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/Los_Angeles # Change to your timezone
+      - TZ=Europe/Moscow # Change to your timezone
       - SERVERPORT=51820
       #- SERVERURL=my.ddns.net #optional - For use with DDNS (Uncomment to use)
       - PEERS=1 # How many peers to generate for you (clients)
       - PEERDNS=10.2.0.100 # Set it to point to pihole
       - INTERNAL_SUBNET=10.6.0.0
-      
     volumes:
       - ./wireguard:/config
       - /lib/modules:/lib/modules
@@ -43,30 +40,29 @@ services:
       - "51820:51820/udp"
     dns:
       - 10.2.0.100 # Points to pihole
-      - 10.2.0.200 # Points to unbound
+      - 10.2.0.200 # Points to cloudflared
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
-
     restart: unless-stopped
     networks:
       private_network:
         ipv4_address: 10.2.0.3
 
   pihole:
-    depends_on: [unbound]
+    depends_on: [cloudflared]
     container_name: pihole
     image: pihole/pihole:latest
     restart: unless-stopped
     hostname: pihole
     dns:
       - 127.0.0.1
-      - 10.2.0.200 # Points to unbound
+      - 10.2.0.200 # Points to cloudflared
     environment:
-      TZ: "America/Los_Angeles"
+      TZ: "Europe/Moscow"
       WEBPASSWORD: "" # Blank password - Can be whatever you want.
       ServerIP: 10.2.0.100 # Internal IP of pihole
-      DNS1: 10.2.0.200 # Unbound IP
-      DNS2: 10.2.0.200 # If we don't specify two, it will auto pick google.
+      DNS1: 10.2.0.200#5054 # cloudflared IP
+      DNS2: 10.2.0.200#5054 # If we don't specify two, it will auto pick google.
     # Volumes store your data between container upgrades
     volumes:
       - "./etc-pihole/:/etc/pihole/"
